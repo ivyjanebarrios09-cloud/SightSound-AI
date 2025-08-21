@@ -16,7 +16,6 @@ import { Logo } from '@/components/icons';
 
 const signupSchema = z.object({
   firstName: z.string().min(1, { message: 'First name is required.' }),
-  middleInitial: z.string().max(1, { message: 'Middle initial must be a single letter.' }).optional().or(z.literal('')),
   lastName: z.string().min(1, { message: 'Last name is required.' }),
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
@@ -31,7 +30,6 @@ export default function SignupPage() {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       firstName: '',
-      middleInitial: '',
       lastName: '',
       email: '',
       password: '',
@@ -43,7 +41,6 @@ export default function SignupPage() {
     try {
       await signUpWithEmail(values.email, values.password, {
         firstName: values.firstName,
-        middleInitial: values.middleInitial,
         lastName: values.lastName,
       });
       toast({
@@ -103,19 +100,6 @@ export default function SignupPage() {
                   )}
                 />
               </div>
-               <FormField
-                  control={form.control}
-                  name="middleInitial"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Middle Initial (Optional)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="D" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               <FormField
                 control={form.control}
                 name="email"
