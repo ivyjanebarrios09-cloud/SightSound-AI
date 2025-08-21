@@ -16,7 +16,29 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Upload, Volume2, Play, Repeat } from 'lucide-react';
 
 type VoiceOption = 'male' | 'female';
-type Status = 'idle' | 'locating' | 'processing' | 'success' | 'error';
+type Status = 
+  | 'idle' 
+  | 'locating' 
+  | 'uploadingImage' 
+  | 'generatingDescription'
+  | 'generatingAudio'
+  | 'uploadingAudio'
+  | 'saving'
+  | 'success' 
+  | 'error';
+
+const statusMessages: Record<Status, string> = {
+  idle: '',
+  locating: 'Getting location...',
+  uploadingImage: 'Uploading image...',
+  generatingDescription: 'Generating description...',
+  generatingAudio: 'Generating audio...',
+  uploadingAudio: 'Uploading audio...',
+  saving: 'Saving result...',
+  success: 'Done!',
+  error: 'An error occurred.',
+};
+
 
 export default function ImageProcessor() {
   const { user } = useAuth();
@@ -89,24 +111,28 @@ export default function ImageProcessor() {
   const handleSubmit = async () => {
     if (!imageFile || !user) return;
 
-    setStatus('processing');
     try {
       // 1. Upload image to Storage
+      setStatus('uploadingImage');
       const imageUrl = await uploadImage(imageFile, user.uid);
 
       // 2. Generate description
+      setStatus('generatingDescription');
       const photoDataUri = await fileToDataUri(imageFile);
       const { description: generatedDesc } = await generateImageDescription({ photoDataUri });
       setDescription(generatedDesc);
 
       // 3. Generate TTS
+      setStatus('generatingAudio');
       const { audioUrl: generatedAudioDataUri } = await textToSpeech({ text: generatedDesc, voice });
       
       // 4. Upload audio to storage
+      setStatus('uploadingAudio');
       const finalAudioUrl = await uploadAudio(generatedAudioDataUri, user.uid);
       setAudioUrl(finalAudioUrl);
 
       // 5. Save to history
+      setStatus('saving');
       await addHistoryEntry(user.uid, {
         imageUrl,
         description: generatedDesc,
@@ -122,11 +148,12 @@ export default function ImageProcessor() {
 
     } catch (error: any) {
       console.error(error);
+      const errorMessage = error.message || `An error occurred during: ${statusMessages[status]}`;
       setStatus('error');
       toast({
         variant: 'destructive',
         title: 'An error occurred',
-        description: error.message || 'Failed to process the image.',
+        description: errorMessage,
       });
     }
   };
@@ -140,8 +167,18 @@ export default function ImageProcessor() {
     setStatus('idle');
   }
 
-  const isLoading = status === 'locating' || status === 'processing';
-  const showResult = status === 'success' || status === 'processing' || status === 'error';
+  const isProcessing = [
+    'uploadingImage',
+    'generatingDescription',
+    'generatingAudio',
+    'uploadingAudio',
+    'saving',
+  ].includes(status);
+  
+  const isLoading = status === 'locating' || isProcessing;
+  const showResult = isProcessing || status === 'success' || status === 'error';
+  const buttonText = isProcessing ? statusMessages[status] : '3. Generate Description';
+
 
   return (
     <div className="container mx-auto p-4 md:p-8">
@@ -174,7 +211,7 @@ export default function ImageProcessor() {
             )}
             
             {location && <p className="mt-4 text-sm text-muted-foreground">Location: {location}</p>}
-            {status === 'locating' && <p className="mt-2 text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Getting location...</p>}
+            {status === 'locating' && <p className="mt-2 text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin"/> {statusMessages[status]}</p>}
             
           </CardContent>
           <CardFooter className="flex flex-col items-stretch gap-4">
@@ -199,7 +236,7 @@ export default function ImageProcessor() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
+                  {buttonText}
                 </>
               ) : (
                 '3. Generate Description'
@@ -216,7 +253,7 @@ export default function ImageProcessor() {
           <CardContent className="space-y-4">
             <div>
               <Label htmlFor="description">Generated Description</Label>
-              {status === 'processing' && !description && (
+              {isProcessing && !description && (
                 <div className="mt-2 space-y-2">
                    <div className="h-4 w-full animate-pulse rounded-md bg-muted"></div>
                    <div className="h-4 w-3/4 animate-pulse rounded-md bg-muted"></div>
@@ -232,7 +269,7 @@ export default function ImageProcessor() {
             </div>
              <div>
               <Label>Generated Audio</Label>
-              {status === 'processing' && !audioUrl && (
+              {isProcessing && !audioUrl && (
                   <div className="mt-2 h-10 w-full animate-pulse rounded-md bg-muted"></div>
               )}
               {audioUrl && (
