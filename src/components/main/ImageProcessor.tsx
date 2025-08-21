@@ -13,11 +13,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Upload, Volume2, Play, Repeat } from 'lucide-react';
+import { Loader2, Camera, Volume2, Play, Repeat, RefreshCcw } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 type VoiceOption = 'male' | 'female';
 type Status = 
-  | 'idle' 
+  | 'idle'
+  | 'capturing'
   | 'locating' 
   | 'uploadingImage' 
   | 'generatingDescription'
@@ -29,6 +31,7 @@ type Status =
 
 const statusMessages: Record<Status, string> = {
   idle: '',
+  capturing: 'Capturing photo...',
   locating: 'Getting location...',
   uploadingImage: 'Uploading image...',
   generatingDescription: 'Generating description...',
@@ -38,7 +41,6 @@ const statusMessages: Record<Status, string> = {
   success: 'Done!',
   error: 'An error occurred.',
 };
-
 
 export default function ImageProcessor() {
   const { user } = useAuth();
@@ -50,15 +52,45 @@ export default function ImageProcessor() {
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [status, setStatus] = useState<Status>('idle');
   const [voice, setVoice] = useState<VoiceOption>('female');
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (user?.preferences?.voice) {
       setVoice(user.preferences.voice);
     }
-  }, [user]);
+
+    const getCameraPermission = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        setHasCameraPermission(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        fetchLocation();
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Camera Access Denied',
+          description: 'Please enable camera permissions in your browser settings.',
+        });
+      }
+    };
+    getCameraPermission();
+
+    return () => {
+      // Cleanup: stop camera stream when component unmounts
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [toast]);
 
   const handleVoiceChange = (newVoice: VoiceOption) => {
     setVoice(newVoice);
@@ -67,15 +99,27 @@ export default function ImageProcessor() {
     }
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      resetState();
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-      fetchLocation();
+  const handleCapture = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    setStatus('capturing');
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      const dataUri = canvas.toDataURL('image/jpeg');
+      setImagePreview(dataUri);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], 'capture.jpg', { type: 'image/jpeg' });
+          setImageFile(file);
+        }
+      }, 'image/jpeg');
     }
-  };
+    setStatus('idle');
+  }
 
   const fetchLocation = () => {
     setStatus('locating');
@@ -112,26 +156,21 @@ export default function ImageProcessor() {
     if (!imageFile || !user) return;
 
     try {
-      // 1. Upload image to Storage
       setStatus('uploadingImage');
       const imageUrl = await uploadImage(imageFile, user.uid);
 
-      // 2. Generate description
       setStatus('generatingDescription');
       const photoDataUri = await fileToDataUri(imageFile);
       const { description: generatedDesc } = await generateImageDescription({ photoDataUri });
       setDescription(generatedDesc);
 
-      // 3. Generate TTS
       setStatus('generatingAudio');
       const { audioUrl: generatedAudioDataUri } = await textToSpeech({ text: generatedDesc, voice });
       
-      // 4. Upload audio to storage
       setStatus('uploadingAudio');
       const finalAudioUrl = await uploadAudio(generatedAudioDataUri, user.uid);
       setAudioUrl(finalAudioUrl);
 
-      // 5. Save to history
       setStatus('saving');
       await addHistoryEntry(user.uid, {
         imageUrl,
@@ -161,7 +200,6 @@ export default function ImageProcessor() {
   const resetState = () => {
     setImageFile(null);
     setImagePreview(null);
-    setLocation(null);
     setDescription('');
     setAudioUrl('');
     setStatus('idle');
@@ -175,7 +213,7 @@ export default function ImageProcessor() {
     'saving',
   ].includes(status);
   
-  const isLoading = status === 'locating' || isProcessing;
+  const isLoading = status === 'locating' || isProcessing || status === 'capturing';
   const showResult = isProcessing || status === 'success' || status === 'error';
   const buttonText = isProcessing ? statusMessages[status] : '3. Generate Description';
 
@@ -185,36 +223,53 @@ export default function ImageProcessor() {
       <div className="grid gap-8 md:grid-cols-2">
         <Card className="flex flex-col">
           <CardHeader>
-            <CardTitle>1. Upload Your Image</CardTitle>
-            <CardDescription>Capture a photo or select an image file to begin.</CardDescription>
+            <CardTitle>1. Capture a Photo</CardTitle>
+            <CardDescription>Use your camera to take a picture.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col items-center justify-center text-center p-6">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*"
-              className="hidden"
-            />
-            {imagePreview ? (
-              <div className="relative w-full max-w-md aspect-video rounded-lg overflow-hidden border">
+            <canvas ref={canvasRef} className="hidden" />
+            <div className="relative w-full max-w-md aspect-video rounded-lg overflow-hidden border bg-muted">
+              {imagePreview ? (
                 <Image src={imagePreview} alt="Selected preview" layout="fill" objectFit="contain" />
-              </div>
-            ) : (
-              <div
-                className="w-full max-w-md aspect-video rounded-lg border-2 border-dashed border-muted-foreground/50 flex flex-col items-center justify-center cursor-pointer hover:bg-muted"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="h-12 w-12 text-muted-foreground" />
-                <p className="mt-4 text-muted-foreground">Click or drag to upload</p>
-              </div>
-            )}
+              ) : (
+                <>
+                  <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+                  {hasCameraPermission === false && (
+                    <div className="absolute inset-0 flex items-center justify-center p-4">
+                      <Alert variant="destructive">
+                        <Camera className="h-4 w-4" />
+                        <AlertTitle>Camera Access Required</AlertTitle>
+                        <AlertDescription>
+                          Please allow camera access in your browser settings to use this feature.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
+                  {hasCameraPermission === null && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary"/>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             
             {location && <p className="mt-4 text-sm text-muted-foreground">Location: {location}</p>}
             {status === 'locating' && <p className="mt-2 text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin"/> {statusMessages[status]}</p>}
             
           </CardContent>
           <CardFooter className="flex flex-col items-stretch gap-4">
+            <div className="flex items-center gap-2">
+              <Button onClick={handleCapture} disabled={!hasCameraPermission || !!imagePreview} className="w-full">
+                <Camera className="mr-2 h-4 w-4" />
+                Capture Photo
+              </Button>
+              {imagePreview && (
+                <Button onClick={resetState} variant="outline" size="icon">
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
              <div>
               <Label className="font-semibold">2. Choose a Voice</Label>
               <RadioGroup value={voice} onValueChange={(v) => handleVoiceChange(v as VoiceOption)} className="mt-2 grid grid-cols-2 gap-4">
