@@ -4,7 +4,6 @@ import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { getFormattedLocation } from '@/utils/location';
-import { uploadImage, uploadAudio } from '@/lib/firebase/storage';
 import { addHistoryEntry, updateUserPreferences } from '@/lib/firebase/firestore';
 import { generateImageDescription } from '@/ai/flows/generate-image-description';
 import { textToSpeech } from '@/ai/flows/text-to-speech-generation';
@@ -22,10 +21,8 @@ type Status =
   | 'idle'
   | 'capturing'
   | 'locating' 
-  | 'uploadingImage' 
   | 'generatingDescription'
   | 'generatingAudio'
-  | 'uploadingAudio'
   | 'saving'
   | 'success' 
   | 'error';
@@ -36,10 +33,8 @@ const statusMessages: Record<Status, string> = {
   idle: '',
   capturing: 'Scanning scene...',
   locating: 'Getting location...',
-  uploadingImage: 'Uploading image...',
   generatingDescription: 'Generating description...',
   generatingAudio: 'Generating audio...',
-  uploadingAudio: 'Uploading audio...',
   saving: 'Saving result...',
   success: 'Done!',
   error: 'An error occurred.',
@@ -48,7 +43,6 @@ const statusMessages: Record<Status, string> = {
 export default function ImageProcessor() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [location, setLocation] = useState<string | null>(null);
   const [description, setDescription] = useState<string>('');
@@ -138,12 +132,6 @@ export default function ImageProcessor() {
       context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
       const dataUri = canvas.toDataURL('image/jpeg');
       setImagePreview(dataUri);
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const file = new File([blob], 'capture.jpg', { type: 'image/jpeg' });
-          setImageFile(file);
-        }
-      }, 'image/jpeg');
     }
     setStatus('idle');
   }
@@ -169,40 +157,24 @@ export default function ImageProcessor() {
       }
     );
   };
-  
-  const fileToDataUri = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
 
   const handleSubmit = async () => {
-    if (!imageFile || !user) return;
+    if (!imagePreview || !user) return;
 
     try {
-      setStatus('uploadingImage');
-      const imageUrl = await uploadImage(imageFile, user.uid);
-
       setStatus('generatingDescription');
-      const photoDataUri = await fileToDataUri(imageFile);
-      const { description: generatedDesc } = await generateImageDescription({ photoDataUri });
+      const { description: generatedDesc } = await generateImageDescription({ photoDataUri: imagePreview });
       setDescription(generatedDesc);
 
       setStatus('generatingAudio');
       const { audioUrl: generatedAudioDataUri } = await textToSpeech({ text: generatedDesc, voice });
-      
-      setStatus('uploadingAudio');
-      const finalAudioUrl = await uploadAudio(generatedAudioDataUri, user.uid);
-      setAudioUrl(finalAudioUrl);
+      setAudioUrl(generatedAudioDataUri);
 
       setStatus('saving');
       await addHistoryEntry(user.uid, {
-        imageUrl,
+        imageUrl: imagePreview,
         description: generatedDesc,
-        audioUrl: finalAudioUrl,
+        audioUrl: generatedAudioDataUri,
         location: location || 'Location not available',
         voiceUsed: voice,
       });
@@ -225,7 +197,6 @@ export default function ImageProcessor() {
   };
   
   const resetState = () => {
-    setImageFile(null);
     setImagePreview(null);
     setDescription('');
     setAudioUrl('');
@@ -237,10 +208,8 @@ export default function ImageProcessor() {
   }
 
   const isProcessing = [
-    'uploadingImage',
     'generatingDescription',
     'generatingAudio',
-    'uploadingAudio',
     'saving',
   ].includes(status);
   
@@ -334,7 +303,7 @@ export default function ImageProcessor() {
                   </div>
               </RadioGroup>
             </div>
-            <Button onClick={handleSubmit} disabled={!imageFile || isLoading} size="lg">
+            <Button onClick={handleSubmit} disabled={!imagePreview || isLoading} size="lg">
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

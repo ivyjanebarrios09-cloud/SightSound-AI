@@ -5,7 +5,6 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { textToSpeech } from '@/ai/flows/text-to-speech-generation';
-import { uploadAudio } from '@/lib/firebase/storage';
 import { updateHistoryEntryAudio } from '@/lib/firebase/firestore';
 import type { HistoryEntry } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -35,9 +34,10 @@ export default function HistoryItem({ entry }: { entry: HistoryEntry }) {
         text: entry.description,
         voice: newVoice,
       });
-      const finalAudioUrl = await uploadAudio(newAudioDataUri, user.uid);
-      await updateHistoryEntryAudio(entry.id, finalAudioUrl, newVoice);
-      setCurrentAudioUrl(finalAudioUrl);
+      
+      await updateHistoryEntryAudio(entry.id, newAudioDataUri, newVoice);
+      setCurrentAudioUrl(newAudioDataUri);
+
       toast({ title: 'Audio regenerated!', description: `Switched to ${newVoice} voice.` });
       setTimeout(() => audioRef.current?.play(), 100);
     } catch (error: any) {
