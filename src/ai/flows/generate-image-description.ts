@@ -35,7 +35,7 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateImageDescriptionOutputSchema},
   prompt: `You are an AI assistant that describes images.
 
-  Please provide a concise and descriptive summary of the image provided.
+  Please provide a detailed and descriptive summary of the image provided. Describe the main subject, the background, any objects, colors, and the overall mood of the scene.
 
   Image: {{media url=photoDataUri}}`,
 });
