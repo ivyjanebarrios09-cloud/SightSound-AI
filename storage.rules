@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /images/{userId}/{allPaths=**} {
+      // Allow read and write access only if the user is authenticated
+      // and the userId in the path matches the user's UID.
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /audio/{userId}/{allPaths=**} {
+      // Allow read and write access only if the user is authenticated
+      // and the userId in the path matches the user's UID.
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
