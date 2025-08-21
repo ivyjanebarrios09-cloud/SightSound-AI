@@ -21,9 +21,9 @@ export const createUserProfile = async (user: User, name?: { firstName?: string,
 
 export const updateUserPreferences = async (userId: string, preferences: Partial<UserPreferences>) => {
   const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, {
-    preferences: preferences,
-  });
+  // Using setDoc with merge:true will create the document if it doesn't exist,
+  // and update it if it does. This prevents "No document to update" errors.
+  await setDoc(userRef, { preferences }, { merge: true });
 };
 
 export const addHistoryEntry = async (
