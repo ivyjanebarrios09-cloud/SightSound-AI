@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -13,8 +13,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Camera, Volume2, Play, Repeat, RefreshCcw } from 'lucide-react';
+import { Loader2, Camera, Volume2, Play, Repeat, RefreshCcw, Video, VideoOff } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
 
 type VoiceOption = 'male' | 'female';
 type Status = 
@@ -29,9 +30,11 @@ type Status =
   | 'success' 
   | 'error';
 
+type FacingMode = 'user' | 'environment';
+
 const statusMessages: Record<Status, string> = {
   idle: '',
-  capturing: 'Capturing photo...',
+  capturing: 'Scanning scene...',
   locating: 'Getting location...',
   uploadingImage: 'Uploading image...',
   generatingDescription: 'Generating description...',
@@ -53,44 +56,68 @@ export default function ImageProcessor() {
   const [status, setStatus] = useState<Status>('idle');
   const [voice, setVoice] = useState<VoiceOption>('female');
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [facingMode, setFacingMode] = useState<FacingMode>('environment');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+
+  const stopCameraStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+      if(videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    }
+  }, []);
+
+  const startCameraStream = useCallback(async (mode: FacingMode) => {
+    stopCameraStream(); // Stop any existing stream
+    if (!isCameraOn) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: mode } 
+      });
+      setHasCameraPermission(true);
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      setHasCameraPermission(false);
+      setIsCameraOn(false);
+      toast({
+        variant: 'destructive',
+        title: 'Camera Access Denied',
+        description: 'Please enable camera permissions in your browser settings.',
+      });
+    }
+  }, [isCameraOn, stopCameraStream, toast]);
 
   useEffect(() => {
     if (user?.preferences?.voice) {
       setVoice(user.preferences.voice);
     }
-
-    const getCameraPermission = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        setHasCameraPermission(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-        fetchLocation();
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        setHasCameraPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Camera Access Denied',
-          description: 'Please enable camera permissions in your browser settings.',
-        });
-      }
-    };
-    getCameraPermission();
+    fetchLocation();
 
     return () => {
-      // Cleanup: stop camera stream when component unmounts
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
+      stopCameraStream();
     };
-  }, [toast]);
+  }, [stopCameraStream]);
+  
+  useEffect(() => {
+    if (isCameraOn) {
+      startCameraStream(facingMode);
+    } else {
+      stopCameraStream();
+    }
+  }, [isCameraOn, facingMode, startCameraStream, stopCameraStream]);
 
   const handleVoiceChange = (newVoice: VoiceOption) => {
     setVoice(newVoice);
@@ -205,6 +232,10 @@ export default function ImageProcessor() {
     setStatus('idle');
   }
 
+  const toggleFacingMode = () => {
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+  }
+
   const isProcessing = [
     'uploadingImage',
     'generatingDescription',
@@ -223,8 +254,8 @@ export default function ImageProcessor() {
       <div className="grid gap-8 md:grid-cols-2">
         <Card className="flex flex-col">
           <CardHeader>
-            <CardTitle>1. Capture a Photo</CardTitle>
-            <CardDescription>Use your camera to take a picture.</CardDescription>
+            <CardTitle>1. Scan a Scene</CardTitle>
+            <CardDescription>Use your camera to scan the scene.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col items-center justify-center text-center p-6">
             <canvas ref={canvasRef} className="hidden" />
@@ -234,6 +265,12 @@ export default function ImageProcessor() {
               ) : (
                 <>
                   <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+                  {!isCameraOn && hasCameraPermission !== false && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-background/80">
+                        <VideoOff className="h-12 w-12 text-muted-foreground mb-4" />
+                        <p className="text-muted-foreground">Camera is off</p>
+                    </div>
+                  )}
                   {hasCameraPermission === false && (
                     <div className="absolute inset-0 flex items-center justify-center p-4">
                       <Alert variant="destructive">
@@ -259,10 +296,20 @@ export default function ImageProcessor() {
             
           </CardContent>
           <CardFooter className="flex flex-col items-stretch gap-4">
+             <div className="flex items-center justify-center gap-4">
+                <div className="flex items-center space-x-2">
+                    <Switch id="camera-toggle" checked={isCameraOn} onCheckedChange={setIsCameraOn} disabled={hasCameraPermission === false}/>
+                    <Label htmlFor="camera-toggle">{isCameraOn ? 'Cam On' : 'Cam Off'}</Label>
+                </div>
+                <Button onClick={toggleFacingMode} variant="outline" size="icon" disabled={!isCameraOn || !!imagePreview}>
+                    <RefreshCcw className="h-4 w-4" />
+                    <span className="sr-only">Switch Camera</span>
+                </Button>
+            </div>
             <div className="flex items-center gap-2">
-              <Button onClick={handleCapture} disabled={!hasCameraPermission || !!imagePreview} className="w-full">
+              <Button onClick={handleCapture} disabled={!hasCameraPermission || !isCameraOn || !!imagePreview} className="w-full">
                 <Camera className="mr-2 h-4 w-4" />
-                Capture Photo
+                Scan Scene
               </Button>
               {imagePreview && (
                 <Button onClick={resetState} variant="outline" size="icon">
