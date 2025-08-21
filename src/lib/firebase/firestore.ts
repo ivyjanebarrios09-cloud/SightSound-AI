@@ -3,11 +3,14 @@ import { doc, setDoc, updateDoc, collection, addDoc, query, where, getDocs, orde
 import { User } from 'firebase/auth';
 import type { UserPreferences, HistoryEntry } from '@/lib/types';
 
-export const createUserProfile = async (user: User) => {
+export const createUserProfile = async (user: User, name?: { firstName?: string, middleInitial?: string, lastName?: string }) => {
   const userRef = doc(db, 'users', user.uid);
   const userProfile = {
     userId: user.uid,
     email: user.email,
+    firstName: name?.firstName || '',
+    middleInitial: name?.middleInitial || '',
+    lastName: name?.lastName || '',
     createdAt: serverTimestamp(),
     preferences: {
       theme: 'system',

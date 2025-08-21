@@ -15,6 +15,9 @@ import { Loader2 } from 'lucide-react';
 import { Logo } from '@/components/icons';
 
 const signupSchema = z.object({
+  firstName: z.string().min(1, { message: 'First name is required.' }),
+  middleInitial: z.string().max(1, { message: 'Middle initial must be a single letter.' }).optional().or(z.literal('')),
+  lastName: z.string().min(1, { message: 'Last name is required.' }),
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
 });
@@ -27,6 +30,9 @@ export default function SignupPage() {
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
+      firstName: '',
+      middleInitial: '',
+      lastName: '',
       email: '',
       password: '',
     },
@@ -35,7 +41,11 @@ export default function SignupPage() {
   async function onSubmit(values: z.infer<typeof signupSchema>) {
     setIsLoading(true);
     try {
-      await signUpWithEmail(values.email, values.password);
+      await signUpWithEmail(values.email, values.password, {
+        firstName: values.firstName,
+        middleInitial: values.middleInitial,
+        lastName: values.lastName,
+      });
       toast({
         title: 'Account created.',
         description: "We've created your account for you.",
@@ -60,11 +70,52 @@ export default function SignupPage() {
             <Logo className="h-8 w-8 text-primary" />
             <CardTitle className="text-2xl">Create an account</CardTitle>
           </div>
-          <CardDescription>Enter your email below to create your account</CardDescription>
+          <CardDescription>Enter your details below to create your account</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Doe" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+               <FormField
+                  control={form.control}
+                  name="middleInitial"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Middle Initial (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="D" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               <FormField
                 control={form.control}
                 name="email"

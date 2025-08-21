@@ -18,9 +18,9 @@ import {
   createUserProfile
 } from './firestore';
 
-export const signUpWithEmail = async (email, password) => {
+export const signUpWithEmail = async (email, password, name) => {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  await createUserProfile(userCredential.user);
+  await createUserProfile(userCredential.user, name);
   return userCredential;
 };
 
@@ -39,7 +39,10 @@ export const signInWithGoogle = async () => {
 
   if (!docSnap.exists()) {
     // Create profile if it doesn't exist
-    await createUserProfile(user);
+    const displayName = user.displayName?.split(' ') || [];
+    const firstName = displayName[0] || '';
+    const lastName = displayName[displayName.length - 1] || '';
+    await createUserProfile(user, { firstName, lastName });
   }
 
   return result;
