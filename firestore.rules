@@ -1,0 +1,17 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can only read and write to their own user document.
+    match /users/{userId} {
+      allow read, update, create: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Users can only read and write their own history entries.
+    match /history/{document=**} {
+       allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+  }
+}
