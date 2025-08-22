@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Logo } from '@/components/icons';
-import { LayoutDashboard, History, LogOut, User as UserIcon } from 'lucide-react';
+import { Home, History, LogOut } from 'lucide-react';
 
 export function Navbar() {
   const { user } = useAuth();
@@ -43,10 +43,10 @@ export function Navbar() {
           <nav className="hidden items-center space-x-6 text-sm font-medium md:flex">
             <Link
               href="/"
-              className="transition-colors hover:text-foreground/80 text-foreground/60"
+              className="transition-colors hover:text-foreground/80 text-foreground"
             >
-              <LayoutDashboard className="h-4 w-4 mr-1.5 inline-block" />
-              Dashboard
+              <Home className="h-4 w-4 mr-1.5 inline-block" />
+              Home
             </Link>
             <Link
               href="/history"
@@ -80,8 +80,8 @@ export function Navbar() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => router.push('/')}>
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  <span>Dashboard</span>
+                  <Home className="mr-2 h-4 w-4" />
+                  <span>Home</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/history')}>
                   <History className="mr-2 h-4 w-4" />
