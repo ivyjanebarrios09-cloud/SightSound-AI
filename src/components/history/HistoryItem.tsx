@@ -59,7 +59,7 @@ export default function HistoryItem({ entry }: { entry: HistoryEntry }) {
     <Card className="flex flex-col h-full overflow-hidden">
       <CardHeader className="p-0">
         <div className="relative w-full aspect-video">
-          <Image src={entry.imageUrl} alt="History item" layout="fill" objectFit="cover" data-ai-hint="history image" />
+          <Image src={entry.imageUrl} alt={entry.description || "History item"} layout="fill" objectFit="cover" data-ai-hint="history image" />
         </div>
       </CardHeader>
       <CardContent className="p-4 flex-1">
