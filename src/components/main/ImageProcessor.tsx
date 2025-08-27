@@ -103,7 +103,8 @@ export default function ImageProcessor() {
     return () => {
       stopCameraStream();
     };
-  }, [stopCameraStream]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   useEffect(() => {
     if (isCameraOn) {
