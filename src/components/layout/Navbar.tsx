@@ -38,7 +38,7 @@ export function Navbar() {
         <div className="mr-4 flex items-center">
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <Logo className="h-6 w-6 text-primary" />
-            <span className="font-bold sm:inline-block">SightSound AI</span>
+            <span className="font-bold sm:inline-block">AuraVis AI</span>
           </Link>
           <nav className="hidden items-center space-x-6 text-sm font-medium md:flex">
             <Link
